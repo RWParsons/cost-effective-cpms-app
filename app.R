@@ -7,6 +7,8 @@ library(kableExtra)
 library(cutpointr)
 library(shinyBS)
 library(cowplot)
+library(shinyWidgets)
+library(shinyjs)
 
 source("utils.R")
 
@@ -25,6 +27,7 @@ dropdown_width <- NULL
 
 
 ui <- fluidPage(
+  useShinyjs(),
   sidebarLayout(
     sidebarPanel(
       sliderInput("cutpoint",
@@ -54,24 +57,42 @@ ui <- fluidPage(
         )
       ),
       tags$br(),
-      bsCollapsePanel(
-        "Settings for sampling",
-        sliderInput("event_rate",
-                    "Rate of the outcome:",
-                    min = 0,
-                    max = 0.5,
-                    value = 0.1),
-        sliderInput("auc",
-                    "Model discrimination (AUC):",
-                    min = 0.5,
-                    max = 1,
-                    value = 0.75),
-        sliderInput("n_samples",
-                    "Sample size:",
-                    min = 0,
-                    max = 1e4,
-                    value = 1e3)
-      )
+      switchInput(
+        inputId = "sim_data_switch",
+        label="Use simulated data",
+        value = TRUE
+      ),
+      bsCollapse(
+        id="sampling_controls",
+        bsCollapsePanel(
+          "Settings for sampling",
+          sliderInput("event_rate",
+                      "Rate of the outcome:",
+                      min = 0,
+                      max = 0.5,
+                      value = 0.1),
+          sliderInput("auc",
+                      "Model discrimination (AUC):",
+                      min = 0.5,
+                      max = 1,
+                      value = 0.75),
+          sliderInput("n_samples",
+                      "Sample size:",
+                      min = 0,
+                      max = 1e4,
+                      value = 1e3)
+        )
+      ),
+      fileInput(
+        "datafile", "Upload CSV file", 
+        accept = c(
+          "text/csv",
+          "text/comma-separated-values,text/plain",
+          ".csv"
+        )
+      ),
+      uiOutput("proba_selector"),
+      uiOutput("actual_selector")
     ),
     mainPanel(
       plotOutput("plots", height=320),
@@ -83,6 +104,47 @@ ui <- fluidPage(
 
 
 server <- function(input, output, session) {
+  
+  observe({
+    if(input$sim_data_switch){
+      show("sampling_controls")
+      hide("datafile")
+    } else {
+      hide("sampling_controls")
+      show("datafile")
+    }
+  })
+  
+  filedata <- reactive({
+    infile <- input$datafile
+    if (is.null(infile)) {
+      return(NULL)
+    }
+    read.csv(infile$datapath)
+  })
+  
+  cols <- reactive({
+    df <- filedata()
+    if (is.null(df)) {
+      return(NULL)
+    } else {
+      return(names(df))
+    }
+  })
+  
+  output$proba_selector <- renderUI({
+    if (is.null(cols())) {
+      return(NULL)
+    }
+    selectInput("col_proba", "Select the predicted probability variable from:", cols())
+  })
+  
+  output$actual_selector <- renderUI({
+    if (is.null(cols())) {
+      return(NULL)
+    }
+    selectInput("col_actual", "Select the (binary) outcome variable from:", cols())
+  })
   
   observe({
     updateCheckboxGroupInput(
@@ -113,17 +175,31 @@ server <- function(input, output, session) {
   })
   
   df_preds <- reactive({
-    set.seed(42)
-    data <- get_sample(
-      auc=input$auc, 
-      n_samples=input$n_samples, 
-      prevalence=input$event_rate
-    )
     
-    mod <- glm(actual ~ predicted, data=data, family=binomial())
-    data$actual <- as.factor(data$actual)
-    data$proba <- predict(mod, type="response")
-    # df_out <<- data
+    if(input$sim_data_switch){
+      set.seed(42)
+      data <- get_sample(
+        auc=input$auc, 
+        n_samples=input$n_samples, 
+        prevalence=input$event_rate
+      )
+      
+      mod <- glm(actual ~ predicted, data=data, family=binomial())
+      data$actual <- as.factor(data$actual)
+      data$proba <- predict(mod, type="response")
+      
+    } else {
+      if(is.null(filedata())) return()
+      if(length(unique(c(input$col_proba, input$col_actual)))!=2) return()
+      data <-
+        filedata()  %>% 
+        select(proba=input$col_proba, actual=input$col_actual) %>%
+        mutate(actual=as.factor(actual))
+      
+      if(length(unique(data$actual))!=2) return()
+    }
+    if(is.null(data)) return()
+    if(nrow(data)==0) return()
     data
   })
   
@@ -142,7 +218,7 @@ server <- function(input, output, session) {
   })
   
   output$plots <- renderPlot({
-    
+    if(is.null(df_preds())) return()
     theme_list <- list(
       theme_bw(),
       theme(text = element_text(size = 13))
@@ -174,7 +250,7 @@ server <- function(input, output, session) {
     cutpoints_df$cp_size <- seq(from=4, to=3, length.out=nrow(cutpoints_df))
     
     
-    rocobj <- pROC::roc(df_preds()$actual, df_preds()$predicted)
+    rocobj <- pROC::roc(df_preds()$actual, df_preds()$proba)
     p_roc <- pROC::ggroc(rocobj) +
       labs(
         col="",
@@ -237,6 +313,7 @@ server <- function(input, output, session) {
   })
   
   output$confusion_matrix <- renderText({
+    if(is.null(df_preds())) return()
     get_confusion() %>%
       mutate(predicted = factor(predicted, levels=c(FALSE, TRUE))) %>%
       pivot_wider(
@@ -248,8 +325,8 @@ server <- function(input, output, session) {
       kable(
         "html", 
         caption=glue::glue(
-          "Confusion matrix using visualised data above",
-          "and the selected cutpoint of {input$cutpoint}"
+          "Confusion matrix using visualised data above ",
+          "and the selected cutpoint ({input$cutpoint})"
         )
       ) %>%
       kable_paper(full_width=FALSE, font_size=18) %>%
@@ -293,5 +370,3 @@ server <- function(input, output, session) {
 
 
 shinyApp(ui = ui, server = server)
-
-

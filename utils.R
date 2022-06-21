@@ -66,11 +66,6 @@ fx_total_nmb <- function(tn, tp, fn, fp, utility_tp, utility_tn, cost_fp, cost_f
 }
 
 get_thresholds <- function(predicted, actual, NMB, get_what=c("optimal_cutpoint")){
-  
-  pt_er <<- cutpointr(
-    x=predicted, class=actual, method=minimize_metric, metric=roc01,
-    silent=TRUE
-  )
 
   pt_er <- cutpointr(
     x=predicted, class=actual, method=minimize_metric, metric=roc01,
