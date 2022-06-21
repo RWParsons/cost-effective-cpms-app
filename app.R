@@ -20,9 +20,6 @@ cutpoint_methods <- c(
   "Index of Union"
 )
 
-cutpoints_colours <- RColorBrewer::brewer.pal(length(cutpoint_methods), "Set2")
-names(cutpoints_colours) <- cutpoint_methods
-
 dropdown_width <- NULL
 
 
@@ -219,10 +216,13 @@ server <- function(input, output, session) {
   
   output$plots <- renderPlot({
     if(is.null(df_preds())) return()
+    
     theme_list <- list(
       theme_bw(),
       theme(text = element_text(size = 13))
     )
+    
+    pal <- "Dark2"
     
     p_hist <- 
       df_preds() %>%
@@ -259,31 +259,33 @@ server <- function(input, output, session) {
       ) +
       theme_list
     
-    if(nrow(cutpoints_df) > 0) {
-      p_hist <- 
-        p_hist +
-        geom_vline(
-          data=cutpoints_df, 
-          aes(xintercept=optimal_cutpoint, col=cutpoint_method),
-          size=cutpoints_df$cp_size,
-          alpha=0.7, 
-          linetype="dashed"
-        )
-      
-      p_roc <- 
-        p_roc +
-        geom_point(
-          data=cutpoints_df, 
-          aes(x=sensitivity, y=specificity, col=cutpoint_method),
-          alpha=0.7
-        ) +
-        geom_label_repel(
-          data=cutpoints_df, 
-          aes(x=sensitivity, y=specificity, label=cutpoint_method)
-        ) +
-        guides(col="none") 
-    }
+    # add cutpoints to graphs
+    p_hist <- 
+      p_hist +
+      geom_vline(
+        data=cutpoints_df, 
+        aes(xintercept=optimal_cutpoint, col=cutpoint_method),
+        size=cutpoints_df$cp_size,
+        alpha=0.7, 
+        linetype="dashed"
+      ) +
+      scale_color_brewer(palette=pal)
     
+    p_roc <- 
+      p_roc +
+      geom_point(
+        data=cutpoints_df, 
+        aes(x=sensitivity, y=specificity, col=cutpoint_method),
+        alpha=0.7
+      ) +
+      geom_label_repel(
+        data=cutpoints_df, 
+        aes(x=sensitivity, y=specificity, label=cutpoint_method)
+      ) +
+      scale_color_brewer(palette=pal) +
+      guides(col="none") 
+    
+    # get legends out of plots and put at bottom with cowplot
     leg1 <- get_legend(
       p_hist +
         guides(col = "none",
