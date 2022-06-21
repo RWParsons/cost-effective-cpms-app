@@ -2,9 +2,11 @@ library(shiny)
 library(shinyalert)
 library(knitr)
 library(tidyverse)
+library(ggrepel)
 library(kableExtra)
 library(cutpointr)
 library(shinyBS)
+library(cowplot)
 
 source("utils.R")
 
@@ -72,7 +74,7 @@ ui <- fluidPage(
       )
     ),
     mainPanel(
-      plotOutput("histogram", height=320),
+      plotOutput("plots", height=320),
       tags$br(),
       tableOutput("confusion_matrix") 
     )
@@ -121,7 +123,7 @@ server <- function(input, output, session) {
     mod <- glm(actual ~ predicted, data=data, family=binomial())
     data$actual <- as.factor(data$actual)
     data$proba <- predict(mod, type="response")
-    df_out <<- data
+    # df_out <<- data
     data
   })
   
@@ -134,52 +136,108 @@ server <- function(input, output, session) {
         "TN"=input$tn_nmb,
         "FP"=input$fp_nmb,
         "FN"=input$fn_nmb
-      )
+      ),
+      get_what=c("optimal_cutpoint", "sensitivity", "specificity")
     )
   })
   
-  output$histogram <- renderPlot({
+  output$plots <- renderPlot({
+    
+    theme_list <- list(
+      theme_bw(),
+      theme(text = element_text(size = 13))
+    )
     
     p_hist <- 
       df_preds() %>%
       ggplot(aes(x=proba, fill=actual)) + 
       geom_histogram() +
-      geom_vline(xintercept=input$cutpoint, size=2, alpha=0.7) +
-      theme_bw() +
       labs(
         x="Predicted probabilities",
         y="Number of observations",
         fill="Event"
       ) +
       scale_x_continuous(limits=c(0,1)) +
-      theme(text = element_text(size = 13))
+      theme_list
     
-    cutpoints_df <- data.frame(
-      cp_name = input$cutpoint_methods,
-      cp_value = get_cutpoints()[input$cutpoint_methods],
-      cp_size = seq(from=4, to=3, length.out=length(input$cutpoint_methods))
-    )
+    cutpoints_df <- get_cutpoints()
+    cutpoints_df <- filter(cutpoints_df, cutpoint_method %in% input$cutpoint_methods)
+    cutpoints_df <- rbind(
+      cutpoints_df,
+      data.frame(optimal_cutpoint=input$cutpoint,
+                 sensitivity=get_selected_cp_metrics()$sensitivity,
+                 specificity=get_selected_cp_metrics()$specificity,
+                 cutpoint_method=c("Selected cutpoint"))
+    ) %>%
+      mutate(cutpoint_method = factor(cutpoint_method, levels=c("Selected cutpoint", cutpoint_methods)))
+    
+    cutpoints_df$cp_size <- seq(from=4, to=3, length.out=nrow(cutpoints_df))
+    
+    
+    rocobj <- pROC::roc(df_preds()$actual, df_preds()$predicted)
+    p_roc <- pROC::ggroc(rocobj) +
+      labs(
+        col="",
+        y="Specificity",
+        x="Sensitivity"
+      ) +
+      theme_list
     
     if(nrow(cutpoints_df) > 0) {
-      p_hist <- p_hist +
+      p_hist <- 
+        p_hist +
         geom_vline(
           data=cutpoints_df, 
-          aes(xintercept=cp_value, col=cp_name),
+          aes(xintercept=optimal_cutpoint, col=cutpoint_method),
           size=cutpoints_df$cp_size,
           alpha=0.7, 
           linetype="dashed"
         )
+      
+      p_roc <- 
+        p_roc +
+        geom_point(
+          data=cutpoints_df, 
+          aes(x=sensitivity, y=specificity, col=cutpoint_method),
+          alpha=0.7
+        ) +
+        geom_label_repel(
+          data=cutpoints_df, 
+          aes(x=sensitivity, y=specificity, label=cutpoint_method)
+        ) +
+        guides(col="none") 
     }
-    p_hist
-
+    
+    leg1 <- get_legend(
+      p_hist +
+        guides(col = "none",
+               fill = guide_legend(nrow=1)) +
+        theme(legend.position="bottom")
+    )
+    
+    leg2 <- get_legend(
+      p_roc +
+        guides(col=guide_legend(nrow=1)) +
+        theme(legend.position="bottom")
+    )
+    
+    p_hist <- p_hist + guides(col="none", fill="none")
+    p_roc <- p_roc + guides(col="none")
+    
+    plots <- plot_grid(p_hist, p_roc)
+    legends <- plot_grid(leg1, leg2, ncol=1)
+    plot_grid(plots, legends, ncol=1, rel_heights = c(0.8,0.2))
   })
   
-  output$confusion_matrix <- renderText({
-    
+  get_confusion <- reactive({
     df_preds() %>%
       group_by(actual, predicted=proba > input$cutpoint) %>%
       summarize(n=n()) %>% 
-      ungroup() %>%
+      ungroup() 
+  })
+  
+  output$confusion_matrix <- renderText({
+    get_confusion() %>%
       mutate(predicted = factor(predicted, levels=c(FALSE, TRUE))) %>%
       pivot_wider(
         names_from=predicted, values_from=n, 
@@ -200,7 +258,40 @@ server <- function(input, output, session) {
       add_header_above(c(" "=1, "Predicted"=2)) %>%
       group_rows("Actual", 1, 2)
   })
+  
+  get_selected_cp_metrics <- reactive({
+    cp_fp <-
+      get_confusion() %>%
+      filter(predicted==1, actual==0) %>%
+      pull(n)
+
+    cp_fn <-
+      get_confusion() %>%
+      filter(predicted==0, actual==1) %>%
+      pull(n)
+
+    cp_tp <-
+      get_confusion() %>%
+      filter(predicted==1, actual==1) %>%
+      pull(n)
+
+    cp_tn <-
+      get_confusion() %>%
+      filter(predicted==0, actual==0) %>%
+      pull(n)
+
+    list(
+      fp=cp_fp,
+      fn=cp_fn,
+      tp=cp_tp,
+      tn=cp_tn,
+      sensitivity=sensitivity(tp=cp_tp, fn=cp_fn),
+      specificity=specificity(fp=cp_fp, tn=cp_tn)
+    )
+  })
 }
 
 
 shinyApp(ui = ui, server = server)
+
+

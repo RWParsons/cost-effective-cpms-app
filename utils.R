@@ -65,23 +65,23 @@ fx_total_nmb <- function(tn, tp, fn, fp, utility_tp, utility_tn, cost_fp, cost_f
   total_nmb
 }
 
-get_thresholds <- function(predicted, actual, NMB){
+get_thresholds <- function(predicted, actual, NMB, get_what=c("optimal_cutpoint")){
+  
+  pt_er <<- cutpointr(
+    x=predicted, class=actual, method=minimize_metric, metric=roc01,
+    silent=TRUE
+  )
 
   pt_er <- cutpointr(
     x=predicted, class=actual, method=minimize_metric, metric=roc01,
     silent=TRUE
-  )[['optimal_cutpoint']]
-  if (pt_er > 1) {
-    pt_er <- 1
-  }
+  )[, get_what]
+
   
   pt_youden <- cutpointr(
     x=predicted, class=actual, method=maximize_metric, metric=youden,
     silent=TRUE
-  )[['optimal_cutpoint']]
-  if (pt_youden > 1) {
-    pt_youden <- 1
-  }
+  )[, get_what]
   
   if(all(!is.na(NMB))){
     pt_cost_effective <- cutpointr(
@@ -89,10 +89,7 @@ get_thresholds <- function(predicted, actual, NMB){
       utility_tp=NMB["TP"], utility_tn=NMB["TN"],
       cost_fp=NMB["FP"], cost_fn=NMB["FN"],
       silent=TRUE
-    )[['optimal_cutpoint']]
-    if (pt_cost_effective > 1) {
-      pt_cost_effective <- 1
-    }
+    )[, get_what]
   } else {
     pt_cost_effective <- NA
   }
@@ -100,25 +97,30 @@ get_thresholds <- function(predicted, actual, NMB){
   pt_cz <- cutpointr(
     x=predicted, class=actual, method=maximize_metric, metric=prod_sens_spec,
     silent=TRUE
-  )[['optimal_cutpoint']]
-  if (pt_cz > 1) {
-    pt_cz <- 1
-  }
+  )[, get_what]
   
   pt_iu <- cutpointr(
     x=predicted, class=actual, method=minimize_metric, metric=roc_iu,
     silent=TRUE
-  )[['optimal_cutpoint']]
-  if (pt_iu > 1) {
-    pt_iu <- 1
-  }
+  )[, get_what]
   
-  c(
-    "Cost-effective"=pt_cost_effective, 
-    "The Closest to (0, 1) Criteria"=pt_er, 
-    "Youden"=pt_youden, 
-    "Sens-Spec product"=pt_cz, 
-    "Index of Union"=pt_iu
+  res <- 
+    rbind(
+      pt_cost_effective,
+      pt_er,
+      pt_youden,
+      pt_cz,
+      pt_iu
+    )
+  
+  res$cutpoint_method <- c(
+    "Cost-effective", 
+    "The Closest to (0, 1) Criteria", 
+    "Youden", 
+    "Sens-Spec product", 
+    "Index of Union"
   )
+  
+  res
 }
 
