@@ -1,4 +1,5 @@
 library(shiny)
+library(shinyalert)
 library(knitr)
 library(tidyverse)
 library(kableExtra)
@@ -26,7 +27,7 @@ ui <- fluidPage(
                   value = 0.5),
       tags$br(),
       dropdownButton(
-        checkboxInput('cutpoints_all', 'Select All/None', value=TRUE),
+        checkboxInput('cutpoints_all', 'Select All/None', value=FALSE),
         label="Add cutpoints", status="default", width=dropdown_width,
         checkboxGroupInput(
           inputId="cutpoint_methods", label="Cutpoint methods:", width=dropdown_width,
@@ -75,6 +76,34 @@ ui <- fluidPage(
 
 
 server <- function(input, output, session) {
+  
+  observe({
+    updateCheckboxGroupInput(
+      inputId='cutpoint_methods', 
+      choices=cutpoint_methods,
+      selected=if(input$cutpoints_all) cutpoint_methods else c()
+    )
+  })
+  
+  observe({
+    if(all(!is.na(input$tp_nmb), !is.na(input$fp_nmb), !is.na(input$fn_nmb), !is.na(input$tn_nmb))){
+      return() # do nothing if all inputs are there
+    } else if("Cost-effective" %in% input$cutpoint_methods){
+      updateCheckboxGroupInput( # update checkbox to uncheck the cost-effective box
+        inputId='cutpoint_methods', 
+        choices=cutpoint_methods,
+        selected=input$cutpoint_methods[input$cutpoint_methods != "Cost-effective"]
+      )
+      shinyalert( # show alert to user
+        "Oops!", 
+        paste(
+          "The Cost-effective threshold only works when there are valid",
+          "inputs for the Net Monetary Benefit 2x2 matrix below.",
+          " You can expand it by clicking on the box below."
+        ), 
+        type = "error")
+    }
+  })
   
   df_preds <- reactive({
     set.seed(42)
