@@ -1,0 +1,13 @@
+name: cost-effective-cpms-app
+title: cost-effective-cpms-app
+username:
+account: aushsi
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 6522993
+bundleId: 6026595
+url: https://aushsi.shinyapps.io/cost-effective-cpms-app/
+when: 1655793576.513
+lastSyncTime: 1655793576.51301
+asMultiple: FALSE
+asStatic: FALSE
