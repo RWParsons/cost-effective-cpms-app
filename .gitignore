@@ -4,4 +4,4 @@
 .Ruserdata
 
 # RStudio Connect folder
-rsconnect/
+rsconnect/*

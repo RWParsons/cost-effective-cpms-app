@@ -54,10 +54,11 @@ ui <- fluidPage(
         )
       ),
       tags$br(),
-      switchInput(
-        inputId = "sim_data_switch",
-        label="Use simulated data",
-        value = TRUE
+      radioButtons(
+        "data_source",
+        label="Use simulated or your own data:",
+        choices=c("simulated", "upload"),
+        selected="simulated"
       ),
       bsCollapse(
         id="sampling_controls",
@@ -103,7 +104,7 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
   observe({
-    if(input$sim_data_switch){
+    if(input$data_source == "simulated"){
       show("sampling_controls")
       hide("datafile")
     } else {
@@ -173,7 +174,7 @@ server <- function(input, output, session) {
   
   df_preds <- reactive({
     
-    if(input$sim_data_switch){
+    if(input$data_source=="simulated"){
       set.seed(42)
       data <- get_sample(
         auc=input$auc, 
