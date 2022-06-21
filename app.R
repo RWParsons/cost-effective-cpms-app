@@ -3,6 +3,8 @@ library(shinyalert)
 library(knitr)
 library(tidyverse)
 library(kableExtra)
+library(cutpointr)
+library(shinyBS)
 
 source("utils.R")
 
@@ -13,6 +15,9 @@ cutpoint_methods <- c(
   "Sens-Spec product", 
   "Index of Union"
 )
+
+cutpoints_colours <- RColorBrewer::brewer.pal(length(cutpoint_methods), "Set2")
+names(cutpoints_colours) <- cutpoint_methods
 
 dropdown_width <- NULL
 
@@ -116,15 +121,30 @@ server <- function(input, output, session) {
     mod <- glm(actual ~ predicted, data=data, family=binomial())
     data$actual <- as.factor(data$actual)
     data$proba <- predict(mod, type="response")
-    
+    df_out <<- data
     data
   })
   
+  get_cutpoints <- reactive({
+    thresholds <- get_thresholds(
+      predicted=df_preds()$proba, 
+      actual=df_preds()$actual,
+      NMB = c(
+        "TP"=input$tp_nmb,
+        "TN"=input$tn_nmb,
+        "FP"=input$fp_nmb,
+        "FN"=input$fn_nmb
+      )
+    )
+  })
+  
   output$histogram <- renderPlot({
-    df_preds() %>%
+    
+    p_hist <- 
+      df_preds() %>%
       ggplot(aes(x=proba, fill=actual)) + 
       geom_histogram() +
-      geom_vline(xintercept=input$cutpoint) +
+      geom_vline(xintercept=input$cutpoint, size=2, alpha=0.7) +
       theme_bw() +
       labs(
         x="Predicted probabilities",
@@ -133,6 +153,25 @@ server <- function(input, output, session) {
       ) +
       scale_x_continuous(limits=c(0,1)) +
       theme(text = element_text(size = 13))
+    
+    cutpoints_df <- data.frame(
+      cp_name = input$cutpoint_methods,
+      cp_value = get_cutpoints()[input$cutpoint_methods],
+      cp_size = seq(from=4, to=3, length.out=length(input$cutpoint_methods))
+    )
+    
+    if(nrow(cutpoints_df) > 0) {
+      p_hist <- p_hist +
+        geom_vline(
+          data=cutpoints_df, 
+          aes(xintercept=cp_value, col=cp_name),
+          size=cutpoints_df$cp_size,
+          alpha=0.7, 
+          linetype="dashed"
+        )
+    }
+    p_hist
+
   })
   
   output$confusion_matrix <- renderText({

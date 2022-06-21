@@ -47,3 +47,78 @@ dropdownButton <- function(label = "", status = c("default", "primary", "success
 });")
   )
 }
+
+roc_iu <- function(tp, fp, tn, fn, .roc_curve, ...) {
+  tempauc <- auc(.roc_curve)
+  sens <- sensitivity(tp = tp, fn = fn)
+  spec <- specificity(fp = fp, tn = tn)
+  iu <- abs(sens - tempauc) + abs(spec - tempauc)
+  iu <- matrix(iu, ncol = 1)
+  colnames(iu) <- "roc_iu"
+  return(iu)
+}
+
+fx_total_nmb <- function(tn, tp, fn, fp, utility_tp, utility_tn, cost_fp, cost_fn, ...){
+  total_nmb <- utility_tp * tp + utility_tn * tn + cost_fp * fp + cost_fn * fn
+  total_nmb <- matrix(total_nmb, ncol = 1)
+  colnames(total_nmb) <- "total_nmb"
+  total_nmb
+}
+
+get_thresholds <- function(predicted, actual, NMB){
+
+  pt_er <- cutpointr(
+    x=predicted, class=actual, method=minimize_metric, metric=roc01,
+    silent=TRUE
+  )[['optimal_cutpoint']]
+  if (pt_er > 1) {
+    pt_er <- 1
+  }
+  
+  pt_youden <- cutpointr(
+    x=predicted, class=actual, method=maximize_metric, metric=youden,
+    silent=TRUE
+  )[['optimal_cutpoint']]
+  if (pt_youden > 1) {
+    pt_youden <- 1
+  }
+  
+  if(all(!is.na(NMB))){
+    pt_cost_effective <- cutpointr(
+      x=predicted, class=actual, method=maximize_metric, metric=fx_total_nmb,
+      utility_tp=NMB["TP"], utility_tn=NMB["TN"],
+      cost_fp=NMB["FP"], cost_fn=NMB["FN"],
+      silent=TRUE
+    )[['optimal_cutpoint']]
+    if (pt_cost_effective > 1) {
+      pt_cost_effective <- 1
+    }
+  } else {
+    pt_cost_effective <- NA
+  }
+  
+  pt_cz <- cutpointr(
+    x=predicted, class=actual, method=maximize_metric, metric=prod_sens_spec,
+    silent=TRUE
+  )[['optimal_cutpoint']]
+  if (pt_cz > 1) {
+    pt_cz <- 1
+  }
+  
+  pt_iu <- cutpointr(
+    x=predicted, class=actual, method=minimize_metric, metric=roc_iu,
+    silent=TRUE
+  )[['optimal_cutpoint']]
+  if (pt_iu > 1) {
+    pt_iu <- 1
+  }
+  
+  c(
+    "Cost-effective"=pt_cost_effective, 
+    "The Closest to (0, 1) Criteria"=pt_er, 
+    "Youden"=pt_youden, 
+    "Sens-Spec product"=pt_cz, 
+    "Index of Union"=pt_iu
+  )
+}
+
