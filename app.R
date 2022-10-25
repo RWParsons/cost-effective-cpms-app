@@ -309,10 +309,22 @@ server <- function(input, output, session) {
   })
   
   get_confusion <- reactive({
-    df_preds() %>%
+    cm <- 
+      df_preds() %>%
       group_by(actual, predicted=proba > input$cutpoint) %>%
       summarize(n=n()) %>% 
-      ungroup() 
+      ungroup()
+    if(nrow(cm) != 4) {
+      cm <- rbind(
+        cm,
+        data.frame(
+          actual = c(0, 1),
+          predicted = !unique(cm$predicted),
+          n = 0
+        )
+      )
+    }
+    cm
   })
   
   output$confusion_matrix <- renderText({
