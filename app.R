@@ -13,7 +13,7 @@ library(shinyjs)
 source("utils.R")
 
 cutpoint_methods <- c(
-  "Cost-effective",
+  "Value-optimising",
   "The Closest to (0, 1) Criteria",
   "Youden",
   "Sens-Spec product",
@@ -159,16 +159,16 @@ server <- function(input, output, session) {
   observe({
     if (all(!is.na(input$tp_nmb), !is.na(input$fp_nmb), !is.na(input$fn_nmb), !is.na(input$tn_nmb))) {
       return() # do nothing if all inputs are there
-    } else if ("Cost-effective" %in% input$cutpoint_methods) {
-      updateCheckboxGroupInput( # update checkbox to uncheck the cost-effective box
+    } else if ("Value-optimising" %in% input$cutpoint_methods) {
+      updateCheckboxGroupInput( # update checkbox to uncheck the Value-optimising box
         inputId = "cutpoint_methods",
         choices = cutpoint_methods,
-        selected = input$cutpoint_methods[input$cutpoint_methods != "Cost-effective"]
+        selected = input$cutpoint_methods[input$cutpoint_methods != "Value-optimising"]
       )
       shinyalert( # show alert to user
         "Oops!",
         paste(
-          "The Cost-effective threshold only works when there are valid",
+          "The Value-optimising threshold only works when there are valid",
           "inputs for the Net Monetary Benefit 2x2 matrix below.",
           " You can expand it by clicking on the box below."
         ),

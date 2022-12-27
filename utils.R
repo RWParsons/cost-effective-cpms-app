@@ -110,7 +110,7 @@ get_thresholds <- function(predicted, actual, NMB, get_what = c("optimal_cutpoin
     )
 
   res$cutpoint_method <- c(
-    "Cost-effective",
+    "Value-optimising",
     "The Closest to (0, 1) Criteria",
     "Youden",
     "Sens-Spec product",
