@@ -176,13 +176,13 @@ server <- function(input, output, session) {
       )
     }
   })
-  
+
   observe({
-    if(input$auc == 1){
-      updateSliderInput(inputId="auc", value = 0.995)
+    if (input$auc == 1) {
+      updateSliderInput(inputId = "auc", value = 0.995)
     }
-    if(input$event_rate == 0){
-      updateSliderInput(inputId="event_rate", 0.005)
+    if (input$event_rate == 0) {
+      updateSliderInput(inputId = "event_rate", 0.005)
     }
   })
 
@@ -222,19 +222,19 @@ server <- function(input, output, session) {
     }
     data
   })
-  
-  
-  get_nmb_vec <- reactiveValues(tp=NA, tn=NA, fp=NA, fn=NA)
-  
+
+
+  get_nmb_vec <- reactiveValues(tp = NA, tn = NA, fp = NA, fn = NA)
+
   observe({
     if (any(is.na(input$tp_nmb), is.na(input$fp_nmb), is.na(input$fn_nmb), is.na(input$tn_nmb))) {
       return() # do nothing if all inputs are there
     }
-    
-    if(!"Value-optimising" %in% input$cutpoint_methods) {
+
+    if (!"Value-optimising" %in% input$cutpoint_methods) {
       return()
     }
-    
+
     get_nmb_vec$tp <- input$tp_nmb
     get_nmb_vec$fp <- input$fp_nmb
     get_nmb_vec$tn <- input$tn_nmb
@@ -242,7 +242,6 @@ server <- function(input, output, session) {
   })
 
   get_cutpoints <- reactive({
-    
     thresholds <- get_thresholds(
       predicted = df_preds()$proba,
       actual = df_preds()$actual,
@@ -361,9 +360,9 @@ server <- function(input, output, session) {
       group_by(actual, predicted = proba > input$cutpoint) %>%
       summarize(n = n()) %>%
       ungroup()
-    
+
     # if the cutpoint is above or below ALL predicted probs, add the empty rows to confusion matrix
-    if (nrow(cm) != 4) { 
+    if (nrow(cm) != 4) {
       cm <- rbind(
         cm,
         data.frame(
