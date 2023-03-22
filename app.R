@@ -80,7 +80,7 @@ ui <- fluidPage(
           ),
           sliderInput("n_samples",
             "Sample size:",
-            min = 0,
+            min = 100,
             max = 1e4,
             value = 1e3
           )
@@ -176,6 +176,15 @@ server <- function(input, output, session) {
       )
     }
   })
+  
+  observe({
+    if(input$auc == 1){
+      updateSliderInput(inputId="auc", value = 0.995)
+    }
+    if(input$event_rate == 0){
+      updateSliderInput(inputId="event_rate", 0.005)
+    }
+  })
 
   df_preds <- reactive({
     if (input$data_source == "simulated") {
@@ -213,16 +222,35 @@ server <- function(input, output, session) {
     }
     data
   })
+  
+  
+  get_nmb_vec <- reactiveValues(tp=NA, tn=NA, fp=NA, fn=NA)
+  
+  observe({
+    if (any(is.na(input$tp_nmb), is.na(input$fp_nmb), is.na(input$fn_nmb), is.na(input$tn_nmb))) {
+      return() # do nothing if all inputs are there
+    }
+    
+    if(!"Value-optimising" %in% input$cutpoint_methods) {
+      return()
+    }
+    
+    get_nmb_vec$tp <- input$tp_nmb
+    get_nmb_vec$fp <- input$fp_nmb
+    get_nmb_vec$tn <- input$tn_nmb
+    get_nmb_vec$fn <- input$fn_nmb
+  })
 
   get_cutpoints <- reactive({
+    
     thresholds <- get_thresholds(
       predicted = df_preds()$proba,
       actual = df_preds()$actual,
       NMB = c(
-        "TP" = input$tp_nmb,
-        "TN" = input$tn_nmb,
-        "FP" = input$fp_nmb,
-        "FN" = input$fn_nmb
+        "TP" = get_nmb_vec$tp,
+        "TN" = get_nmb_vec$tn,
+        "FP" = get_nmb_vec$fp,
+        "FN" = get_nmb_vec$fn
       ),
       get_what = c("optimal_cutpoint", "sensitivity", "specificity")
     )
